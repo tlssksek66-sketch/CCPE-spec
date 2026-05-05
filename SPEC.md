@@ -69,3 +69,9 @@ Long-term memory belongs to strategy. Execution treats each command as near-stat
 On boundary violation — when a command falls outside the receiving instance's chartered role — the receiving instance MUST refuse and request routing clarification, not execute via implicit role extension.
 
 Rationale: implicit self-extension to fulfill misrouted commands collapses the instance separation CCPE depends on. Refusal is correct spec behavior.
+
+### Hard-Limit + Clear-Then-Write Anti-Pattern
+
+When the execution platform enforces a per-invocation time limit (server-side hard limit), do not combine clearing operations with full re-write within a single invocation. Split the operation into smaller units that each fit safely under the limit.
+
+Rationale: timeout mid-clear-and-write produces partial-state corruption. Auto-backup mitigates but does not eliminate the corruption surface — the surface is wider than the backup window. Reproduced across multiple cases (reload-stage and verify-rule-change-stage timeouts share the same class).
