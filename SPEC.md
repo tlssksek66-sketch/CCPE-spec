@@ -63,3 +63,9 @@ Token budgets are explicitly partitioned:
 - Execution instance: raw command + immediate environment + recent results
 
 Long-term memory belongs to strategy. Execution treats each command as near-stateless to maximize raw output capacity.
+
+### Boundary Enforcement
+
+On boundary violation — when a command falls outside the receiving instance's chartered role — the receiving instance MUST refuse and request routing clarification, not execute via implicit role extension.
+
+Rationale: implicit self-extension to fulfill misrouted commands collapses the instance separation CCPE depends on. Refusal is correct spec behavior.
