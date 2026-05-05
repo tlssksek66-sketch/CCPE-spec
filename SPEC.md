@@ -53,6 +53,11 @@ Both instances must implement detection on their counterpart.
 
 ## 5. Context Distribution
 
+### Verify Round-Trip Rule
+
+Verify commands MUST be issued as separate round-trips by the strategy instance, not bundled as sub-steps within an execution command.
+
+Rationale: prevents intra-context confirmation bias on partial-write modes. Execution instance verifying its own write within the same context window cannot detect silent partial-write failures that an independent strategy-side verify would catch.
 Token budgets are explicitly partitioned:
 - Strategy instance: high-level memory, rules, user history
 - Execution instance: raw command + immediate environment + recent results
