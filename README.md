@@ -70,12 +70,22 @@ This format eliminates the human as a relay and enables fully autonomous round-t
 
 ## Status
 
-This specification is in early development. Contributions, critique, and reference implementations welcome.
+This specification is in active development with ongoing dogfooding in production environments. Each release reflects empirical operational evidence (see `cases/` directory and the case-driven promotion pipeline). Contributions, critique, and reference implementations welcome.
+
+Current version: **v0.1.5** (2026-05-08)
 
 ## Author
 
-Originally formulated in 2026.
+Originally formulated by **eulpeul** in 2026.
+
+See [`PRIORITY.md`](./PRIORITY.md) for full authorship declaration, timeline of record, and verification infrastructure. See [`CITATION.cff`](./CITATION.cff) for machine-readable citation format.
 
 ## License
 
 MIT — see [LICENSE](LICENSE)
+
+Note: MIT grants free use including commercial use. **Originating authorship attribution is a separate matter from license grant** — see `PRIORITY.md` §"License vs. Attribution" for the distinction.
+
+## Governance
+
+This project operates under an explicit autonomy charter between the originator (strategy role) and AI collaborator (execution role), itself an application of CCPE Role Charter. See [`AUTONOMY.md`](./AUTONOMY.md).

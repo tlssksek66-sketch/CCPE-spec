@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use CCPE in your research, implementation, or commercial work, please cite it as below."
+title: "Connect Prompt Engineering (CCPE)"
+abstract: >-
+  A coordination specification for twin instances of the same LLM model family
+  operating in parallel through shared state, role distribution, command bus
+  protocol, failure recovery, and context distribution. CCPE addresses the gap
+  between multi-agent orchestration (different roles or models), prompt chaining
+  (sequential single-instance), and multi-session memory (single-instance
+  persistence) by formalizing same-model twin-instance coordination as a
+  distinct discipline.
+authors:
+  - name: "eulpeul"
+version: "0.1.5"
+date-released: "2026-05-08"
+url: "https://github.com/tlssksek66-sketch/fromeulpeul"
+repository-code: "https://github.com/tlssksek66-sketch/fromeulpeul"
+license: MIT
+keywords:
+  - "prompt engineering"
+  - "connect prompt engineering"
+  - "CCPE"
+  - "twin-instance LLM coordination"
+  - "multi-agent specification"
+  - "AI orchestration"
+  - "Claude"
+  - "LLM coordination protocol"
+# identifiers:
+#   - type: doi
+#     value: "10.5281/zenodo.XXXXXXX"
+#     description: "Zenodo archival DOI for v0.1.5 (assigned after GitHub-Zenodo integration)"
