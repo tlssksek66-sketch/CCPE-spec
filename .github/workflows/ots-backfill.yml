@@ -1,0 +1,114 @@
+name: OpenTimestamps Backfill
+
+# Automatically anchor priority-critical files to Bitcoin blockchain
+# via OpenTimestamps on every push to main + on release publication.
+#
+# Sidesteps Quirk #14 (python-bitcoinlib OpenSSL DLL dependency) by
+# running on Ubuntu runner where libssl is ubiquitous.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'PRIORITY.md'
+      - 'SPEC.md'
+      - 'CITATION.cff'
+      - 'README.md'
+      - 'release_notes/**'
+      - 'APPENDIX-PLATFORM-QUIRKS.md'
+      - 'cases/**'
+  release:
+    types: [published]
+  workflow_dispatch:  # manual trigger from Actions tab
+
+jobs:
+  ots-anchor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install opentimestamps-client
+        run: |
+          python -m pip install --upgrade pip
+          pip install opentimestamps-client
+          ots --version
+      
+      - name: Run OTS backfill
+        run: |
+          chmod +x scripts/ots-backfill.sh
+          bash scripts/ots-backfill.sh
+      
+      - name: Commit pending timestamp anchors
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add timestamps/
+          if git diff --cached --quiet; then
+            echo "No timestamp changes to commit"
+            exit 0
+          fi
+          # Compose commit message with run context
+          if [ "${{ github.event_name }}" = "release" ]; then
+            MSG="ots: anchor release ${{ github.event.release.tag_name }} priority evidence"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            MSG="ots: anchor post-push priority evidence (${GITHUB_SHA::7})"
+          else
+            MSG="ots: anchor priority evidence (manual workflow_dispatch)"
+          fi
+          git commit -m "$MSG"
+          git push
+
+  ots-upgrade:
+    # Separate job — upgrades pending proofs after Bitcoin confirmation.
+    # Runs on schedule, not on every push (Bitcoin confirms in 1-6h).
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install opentimestamps-client
+        run: pip install opentimestamps-client
+      
+      - name: Upgrade pending proofs
+        run: |
+          # Only upgrade if timestamps/ exists with .ots files
+          if [ ! -d timestamps ] || [ -z "$(find timestamps -name '*.ots' -print -quit)" ]; then
+            echo "No .ots files to upgrade"
+            exit 0
+          fi
+          ots upgrade timestamps/*.ots || true
+      
+      - name: Commit upgraded proofs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add timestamps/
+          if git diff --cached --quiet; then
+            echo "No upgrades to commit"
+            exit 0
+          fi
+          git commit -m "ots: upgrade with full Bitcoin proofs"
+          git push

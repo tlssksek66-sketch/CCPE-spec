@@ -70,6 +70,27 @@ On boundary violation — when a command falls outside the receiving instance's 
 
 Rationale: implicit self-extension to fulfill misrouted commands collapses the instance separation CCPE depends on. Refusal is correct spec behavior.
 
+### Broad-Verify + Narrow-Execute Combo
+
+When a command's execution scope is intentionally narrow (e.g., a specified FILES list), the verification scope MUST be intentionally broad (e.g., entire repo or all relevant content). The asymmetry catches:
+
+- **Scope misspecification** — intent vs. spelled list mismatch (FILES list omits a file that should have been included)
+- **Hidden side effects** — partial-write or partial-edit footprints outside execution path
+- **Stale state outside execution path** — pre-existing data that the narrow execution would not touch but that affects correctness
+
+Rationale: verification scoped to execution path is structurally insufficient to catch defects that arise from scope misspecification itself — the verifier cannot see what was wrongly excluded by examining only what was included. Asymmetry between execution scope (narrow, controlled) and verification scope (broad, exhaustive) is the only configuration where the verify step can catch *its own* miss.
+
+Reproduced across multiple cases:
+- v20-a1 Phase 2: full-repo grep caught row-cap silent overflow that narrow per-sheet verify missed (#4)
+- v21-bootstrap: full-repo grep caught scope-外 file with leftover `[FILL IN]` that narrow FILES-only verify missed (#11)
+
+The contract is **narrow execute + broad verify ≠ narrow execute + narrow verify**. The latter is structurally insufficient.
+
+Practical guidance for 7-block commands:
+- Block [4] Execution sequence: narrow, explicit FILES list
+- Block [5] Verification: broad scope (entire repo, all relevant patterns)
+- Block [6] Safety guards: trigger on broad-verify failure even if narrow-execute reports success
+
 ### Hard-Limit + Clear-Then-Write Anti-Pattern
 
 When the execution platform enforces a per-invocation time limit (server-side hard limit), do not combine clearing operations with full re-write within a single invocation. Split the operation into smaller units that each fit safely under the limit.

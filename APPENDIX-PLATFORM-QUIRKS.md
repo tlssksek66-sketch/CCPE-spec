@@ -239,3 +239,234 @@ cell budget itself (#8), not cleanup return value.
   population, no derived cols, etc.)
 - v0.1.4 §4 Hard-Limit Anti-Pattern (#8 is the limit; #10 is one of several
   rule-out mechanisms confirming #8 applies)
+
+
+<!-- ============================================================ -->
+<!-- v0.1.6 APPENDIX additions — append to existing APPENDIX-PLATFORM-QUIRKS.md -->
+<!-- Insert after #10 entry, preserve all existing entries -->
+<!-- ============================================================ -->
+
+## #11. Strategy-Side File Naming Convention Drift
+
+**Platform**: Chat → user-relay → repo file transport
+**Class**: quirk (routing defect)
+**First observed**: V21 Bootstrap (2026-05-16)
+**Sister patterns**: #7 (Wrapper-Args Dispatch Routing Gap — both *routing* defects)
+**Cases**: 1 (v21-bootstrap) — APPENDIX queue, needs 2nd case for promotion
+
+### Pattern
+
+Strategy instance (Chat) generates file artifacts with cross-platform-safe
+naming convention: path separators `/` → underscore `_`. User relay does not
+auto-correct on placement. Target repo expects canonical `/` directory
+structure. Result: duplicate file at root, scope-外 from intended location.
+
+Example from V21 Bootstrap:
+- Strategy output: `release_notes_v0.1.5.md` (flat name, portable)
+- Intended location: `release_notes/v0.1.5.md` (canonical, in subdirectory)
+- Actual placement: root-level `release_notes_v0.1.5.md` (duplicate)
+- Existing canonical `release_notes/v0.1.5.md` untouched (stale)
+
+### Detection
+
+Post-edit broad-grep verification catches the duplicate (this is what
+§3.x Broad-Verify + Narrow-Execute is designed for). Without broad
+verification, the scope-外 duplicate ships uncaught.
+
+### Mitigation candidates
+
+- **Strategy-side**: explicit target path declaration in file presentation
+  (e.g., "save as `release_notes/v0.1.5.md`")
+- **User-side**: pre-relay path verification (manually create subdirectories
+  before placing files)
+- **Execution-side**: filename similarity heuristic (already does, but only
+  after broad-grep triggers)
+
+### Resolution pattern
+
+When detected, apply #12 Strict-Superset Reconciliation if content
+provenance favors canonical location.
+
+### Cross-reference
+
+- #7 Wrapper-Args Dispatch Routing Gap (sister routing defect)
+- #12 Strict-Superset Reconciliation (resolution pattern)
+- §3.x Broad-Verify + Narrow-Execute (detection mechanism)
+
+---
+
+## #12. Strict-Superset Reconciliation
+
+**Platform**: File dedup / conflict resolution (general)
+**Class**: positive contract / invariant (NOT a quirk)
+**First observed**: V21 Bootstrap (2026-05-16)
+**Sister patterns**: #10 (Cleanup Idempotent Contract — both positive contracts)
+**Cases**: 1 (v21-bootstrap) — APPENDIX queue
+
+### Pattern
+
+When candidate file A and canonical file B exist and A ⊃ B in content
+(A contains identical body + extras), reconciliation rule is:
+
+1. Apply A → B (overwrite canonical with superset)
+2. Trash A (soft-delete to Recycle Bin / .Trash)
+3. Confirm single-canonical invariant restored
+
+This preserves all content (B's extras survive in canonical), restores the
+single-canonical invariant, and removes the duplicate without data loss.
+
+### Detection signal
+
+Provenance evidence in A's extras that only resolves from canonical location.
+Example from V21 Bootstrap:
+- A: root-level `release_notes_v0.1.5.md` with footer linking `../CITATION.cff`
+- B: canonical `release_notes/v0.1.5.md` without footer
+- A's relative path `../CITATION.cff` only resolves from inside
+  `release_notes/` → A was *intended* for canonical location
+
+### Use
+
+Reconciliation is safe to invoke when:
+- A ⊃ B confirmed by byte-level diff (identical lines + only-in-A lines)
+- Provenance signals favor canonical location
+- Backup of A retained in Recycle Bin (recoverable for 30+ days)
+
+### Anti-pattern
+
+Naive deletion of either A or B without superset check. Loses content if:
+- A trashed without merging extras → B remains stale
+- B overwritten without preserving canonical-only lines (rare for this pattern,
+  but possible if A is not strict superset)
+
+### Cross-reference
+
+- #11 Strategy-Side File Naming Convention Drift (typical cause)
+- #10 Cleanup Idempotent Contract (sister positive contract)
+- v21-bootstrap §7.2 (case derivation)
+
+---
+
+## #13. `git add -A` Scope Pollution
+
+**Platform**: Git CLI workflow (general)
+**Class**: anti-pattern
+**First observed**: V21 Bootstrap (2026-05-16)
+**Sister patterns**: #7 (Wrapper-Args Dispatch — both *scope* defects)
+**Cases**: 1 (v21-bootstrap) — APPENDIX queue
+
+### Pattern
+
+`git add -A` captures all working tree changes including:
+- Files not in the intended FILES variable scope
+- Untracked artifacts (test outputs, partial tool outputs, OS metadata)
+- Files staged by other parallel work
+
+When a 7-block command's FILES variable is explicit, `git add -A` violates
+the intended scope and produces unintended commits.
+
+Example from V21 Bootstrap:
+- Intended FILES: 5 files (CITATION.cff, PRIORITY.md, AUTONOMY.md, README.md, release_notes/v0.1.5.md)
+- `git add -A` also staged: CITATION.md (manually placed by user, scope-外)
+- Result: 6-file commit, CITATION.md committed with leftover `[FILL IN]`
+
+### Detection
+
+Post-commit diff comparison with intended FILES:
+```bash
+git diff --name-only HEAD~1 HEAD | sort > actual.txt
+echo "FILES_LIST" | tr ',' '\n' | sort > intended.txt
+diff actual.txt intended.txt
+```
+Mismatch = scope pollution.
+
+### Mitigation
+
+Default to explicit `git add <FILE list>` when FILES is explicit in 7-block.
+Reserve `git add -A` for cases where:
+- FILES variable is intentionally "all changes" (rare)
+- Working tree is verified clean except for intended changes
+
+Updated 7-block [5] convention:
+```
+$ git add cases/v21-bootstrap.md scripts/ots-backfill.sh CITATION.md
+  # explicit list matches FILES variable
+  # NOT: git add -A
+```
+
+### Self-validation case
+
+V21 PR #2 (`d1bf378`) used explicit `git add <3 files>` per this mitigation
+— validating §7.3 within the same release cycle the case was published.
+
+### Cross-reference
+
+- #7 Wrapper-Args Dispatch Routing Gap (sister scope defect)
+- v21-bootstrap §7.3 (case derivation)
+- §3.x Broad-Verify + Narrow-Execute (broader principle this anti-pattern violates)
+
+---
+
+## #14. python-bitcoinlib OpenSSL DLL Dependency
+
+**Platform**: Python (Windows embedded, Python 3.14)
+**Class**: quirk (environment dependency)
+**First observed**: V21 PR #2 OTS attempt (2026-05-16)
+**Sister patterns**: (none — first environment-incompat quirk)
+**Cases**: 1 (v21-bootstrap PR #2) — APPENDIX queue
+
+### Pattern
+
+`python-bitcoinlib` (transitive dependency of `opentimestamps-client`)
+requires OpenSSL DLL via ctypes at import time:
+
+```python
+import ctypes
+# Inside python-bitcoinlib/core/key.py at import:
+ssl = ctypes.cdll.LoadLibrary(ctypes.util.find_library('ssl'))
+```
+
+On Windows embedded Python 3.14, `find_library('ssl')` returns None →
+`LoadLibrary(None)` raises `TypeError: argument must be str, bytes or os.PathLike`.
+
+`pip install opentimestamps-client` succeeds. The package is "installed" but
+import fails at first use:
+
+```
+$ ots --version
+Traceback (most recent call last):
+  ...
+TypeError: LoadLibrary() argument 1 must be str, bytes or os.PathLike, not NoneType
+```
+
+### Detection
+
+`ots --version` produces Traceback even though `pip show opentimestamps-client`
+confirms installation.
+
+### Affected environments
+
+- Windows + embedded Python 3.14 (confirmed)
+- Likely: any Windows Python without OpenSSL system-wide install
+- Not affected: Linux distributions (libssl ubiquitous), macOS (libssl via brew/system)
+
+### Mitigation
+
+**Recommended (zero user-env dependency)**:
+- GitHub Actions runner (Ubuntu) for OTS automation
+- See `.github/workflows/ots-backfill.yml` (v0.1.6 release)
+- All OTS operations execute in Linux env automatically
+
+**Alternative (manual)**:
+- WSL (Windows Subsystem for Linux) — Ubuntu under Windows
+- Run `bash scripts/ots-backfill.sh` from WSL prompt
+- 1-2 hour initial setup, then native Linux behavior
+
+**Not recommended**:
+- Installing OpenSSL system-wide on Windows (fragile, path conflicts)
+- Custom build of python-bitcoinlib without OpenSSL dep (out of scope)
+
+### Cross-reference
+
+- v21-bootstrap §7 PR #2 (case derivation)
+- `.github/workflows/ots-backfill.yml` (mitigation infrastructure)
+- `scripts/ots-backfill.sh` (works in supported envs, fails gracefully in unsupported)

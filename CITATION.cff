@@ -11,8 +11,8 @@ abstract: >-
   distinct discipline.
 authors:
   - name: "eulpeul"
-version: "0.1.5"
-date-released: "2026-05-08"
+version: "0.1.6"
+date-released: "2026-05-16"
 url: "https://github.com/tlssksek66-sketch/fromeulpeul"
 repository-code: "https://github.com/tlssksek66-sketch/fromeulpeul"
 license: MIT
@@ -28,4 +28,4 @@ keywords:
 # identifiers:
 #   - type: doi
 #     value: "10.5281/zenodo.XXXXXXX"
-#     description: "Zenodo archival DOI for v0.1.5 (assigned after GitHub-Zenodo integration)"
+#     description: "Zenodo archival DOI for v0.1.6 (assigned after GitHub-Zenodo integration)"
