@@ -470,3 +470,164 @@ confirms installation.
 - v21-bootstrap §7 PR #2 (case derivation)
 - `.github/workflows/ots-backfill.yml` (mitigation infrastructure)
 - `scripts/ots-backfill.sh` (works in supported envs, fails gracefully in unsupported)
+
+<!-- ============================================================ -->
+<!-- v0.1.7 APPENDIX additions — append to existing APPENDIX-PLATFORM-QUIRKS.md -->
+<!-- Insert after #14 entry (python-bitcoinlib OpenSSL DLL Dependency) -->
+<!-- ============================================================ -->
+
+## #15. GitHub Actions Workflow Scope Requirement
+
+**Platform**: GitHub OAuth / `gh auth` token scopes
+**Class**: quirk
+**First observed**: v0.1.6 PR push attempt (2026-05-17, pre-v22)
+**Cases**: 1 (v0.1.6 PR Phase — push containing `.github/workflows/` change rejected) — APPENDIX queue
+
+### Pattern
+
+Pushing a commit that adds or modifies files under `.github/workflows/` requires the pushing token to have the `workflow` OAuth scope. Standard `repo` scope is insufficient. Without the scope, GitHub server rejects the push with `refusing to allow an OAuth App to create or update workflow ... without 'workflow' scope`.
+
+### Empirical observation
+
+`gh auth refresh -h github.com -s workflow` (interactive browser auth) was required before the v0.1.6 push containing `.github/workflows/ots-backfill.yml` could succeed.
+
+### Implication for CCPE operators
+
+- Initial repo setup with workflow files needs upfront `workflow` scope grant
+- Re-authentication may be required on token rotation
+- CI/CD-touching PRs from automation systems must carry sufficient scope or hand off to human-supervised push
+
+### Mitigation
+
+Set up scope at first `gh auth login` with `gh auth login --scopes "repo,workflow"`. Or grant after the fact via `gh auth refresh -h github.com -s workflow`.
+
+---
+
+## #16. Claude Code Self-Modification Guardrail
+
+**Platform**: Claude Code agent
+**Class**: contract (positive — defense-in-depth)
+**First documented**: `cases/v21-bootstrap.md` (implicit, settings.json attempt)
+**Reinforced**: `cases/v22-cross-product-memory.md` §3 Phase 1
+**Cases**: 2
+
+### Statement
+
+Claude Code refuses to modify its own permission configuration (`~/.claude/settings.json` `permissions` block) via any tool:
+- The dedicated `update-config` skill: hard-blocked by auto-mode classifier
+- Direct `Edit` on `settings.json` to add allow rules: blocked OR self-refused by CC citing the security intent
+
+The guardrail's scope is **the intent of self-permission-elevation**, not any specific tool. CC recognizes that the boundary is what's being protected, not the specific path to bypass it.
+
+### Empirical observation
+
+In v22 Phase 1:
+1. CC called `update-config` skill → "Denied by auto mode classifier"
+2. CC offered Edit-based workaround
+3. CC then self-refused, articulating: "다른 도구로 같은 행위를 하는 건 그 의도를 무력화하는 것"
+
+This is judgment beyond rule-following — CC recognized intent and refused even when no explicit deny rule existed.
+
+### Implication for CCPE operators
+
+- Permission rule changes must come from outside CC's loop: user manually editing the file, or `/permissions` UI invocation, or chat instance writing artifact for user relay
+- This is a **bootstrap-validation property** of trust: an agent that won't elevate its own privileges can be safely run with high autonomy elsewhere
+- CCPE-conformant agent implementations should preserve this property
+
+### Operator workaround (preserves the property)
+
+When CC needs new permission rules:
+1. CC reports the desired rule with rationale
+2. Chat (different instance, different boundary) writes the updated `settings.json` to artifact
+3. User relays artifact to disk
+4. CC reads + validates result via PowerShell `ConvertFrom-Json` (or `jq` if available)
+
+The pattern relies on the chat-CC capability asymmetry as a *feature* (see RFC-001 §sync evidence).
+
+---
+
+## #17. Permission Rule Prefix Matching Semantics
+
+**Platform**: Claude Code `permissions.allow` rules
+**Class**: quirk
+**First documented**: v21-bootstrap (implicit — `cd && X` not matching `Bash(X:*)`)
+**Refined**: `cases/v22-cross-product-memory.md` §3 Phase 2 + Phase 3
+**Cases**: 1 case with 3 sub-cases (chain failure, subcommand mismatch, literal prefix only)
+
+### Statement
+
+`permissions.allow` rules match by **literal-prefix on the entire command**, where "command" means the full token sequence as invoked. Two non-obvious consequences:
+
+1. **Chain prefix takes precedence**: `A && B` is matched against the prefix `A`, not `B`. To match `Bash(B:*)`, command must invoke `B` standalone.
+2. **Subcommand families don't compose**: `Bash(gh run:*)` does **not** match `gh workflow run`. The match is on the literal leading tokens. `gh run` and `gh workflow run` are different prefixes despite the apparent semantic overlap.
+
+### Empirical observation table
+
+| Allow rule | Invocation | Match? | Reason |
+|---|---|---|---|
+| `Bash(git push:*)` | `git push origin main` | ✅ | exact prefix |
+| `Bash(git push:*)` | `cd path && git push origin main` | ❌ | prefix is `cd path` |
+| `Bash(git push:*)` | `git commit ... && git push ...` | ❌ | prefix is `git commit` |
+| `Bash(git -C "path" push:*)` | `git -C "path" push origin main` | ✅ | exact prefix |
+| `Bash(gh run:*)` | `gh run list` | ✅ | exact prefix |
+| `Bash(gh run:*)` | `gh workflow run ots-backfill.yml` | ❌ | prefix is `gh workflow run`, not `gh run` |
+
+### Implication for CCPE operators
+
+- Write rules for each invocation pattern actually used
+- For subcommand families, enumerate explicitly or use broader patterns: `Bash(gh workflow:*)` covers all `gh workflow X` subcommands
+- Avoid `cd path && cmd` patterns in CCPE workflows — use `cmd -C path` form where supported, or invoke standalone after a separate `cd`
+
+### Mitigation pattern
+
+For frequently used command families, prefer broad subcommand patterns:
+- `Bash(gh workflow:*)` over `Bash(gh workflow run:*)` + `Bash(gh workflow list:*)` + ...
+- `Bash(git -C "<absolute-path>" :*)` style if rule syntax supports it (test in your environment)
+
+---
+
+## #18. Auto-Mode Policy Gate Independence
+
+**Platform**: Claude Code auto-mode classifier
+**Class**: contract (positive — defense-in-depth)
+**First documented**: `cases/v22-cross-product-memory.md` §3 Phase 2 + §4.3
+**Cases**: 1 (v22 Phase 2 — empty commit main push attempt)
+
+### Statement
+
+Claude Code's auto-mode policy gates are an **independent evaluation layer** orthogonal to `permissions.allow` rules. Inclusion of a command pattern in `allow` is **necessary but not sufficient** for autonomous execution. Auto-mode evaluates additional policy heuristics on top of permission rules.
+
+### Empirical observation
+
+In v22 Phase 2, the following allow rule was active:
+```
+Bash(git -C "C:\\Users\\dudvu\\Documents\\GitHub\\CCPE-spec" push:*)
+```
+
+Invocations matching the allow rule:
+- ✅ `git -C "..." push --dry-run origin main` → passed (allow rule + dry-run is non-destructive)
+- ❌ `git -C "..." commit --allow-empty -m "test" && git -C "..." push origin main` → blocked
+
+The block was not due to allow-rule mismatch (the push portion matched), but due to a separate policy gate evaluating "empty commit + push to default branch."
+
+### Implication for CCPE operators
+
+1. Adding a command to `permissions.allow` does not waive auto-mode's defense-in-depth checks
+2. Auto-mode gates protect citable/protected branches from accidental pollution even under permissive allow rules
+3. **This is a positive contract**: operators can rely on auto-mode gates as a backstop even if their permission rules are accidentally over-broad
+
+### Contract guarantee
+
+The asymmetry is intentional. CCPE-conformant implementations should preserve this property: agents that can over-permission themselves accidentally still need protection from acting destructively on protected resources.
+
+### Anti-pattern to avoid
+
+Treating allow-list inclusion as "I can do anything starting with this prefix." Verify actual execution behavior with non-destructive probes (`--dry-run`, status checks, `gh workflow list`) before assuming full automation.
+
+### Verification probe
+
+```bash
+git -C "<path>" push --dry-run origin main
+```
+- Allow rule matches → command executes
+- Auto-mode policy gates evaluate independently (in dry-run, both layers pass; in destructive form, additional gates may block)
