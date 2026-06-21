@@ -61,12 +61,16 @@ STAMP_TARGETS=(
 for target in "${STAMP_TARGETS[@]}"; do
     if [ -f "$target" ]; then
         echo "  Stamping: $target"
+        BASENAME="$(basename "$target").ots"
+        # Defect A (idempotency): a prior run committed timestamps/*.ots; ots stamp
+        # refuses to overwrite an existing .ots and would abort under `set -e`.
+        # Clear any prior anchor (source-adjacent + timestamps/) so re-stamp is safe.
+        rm -f "${target}.ots" "./$BASENAME"
         ots stamp "$target"
         # Move .ots file into timestamps/ for organization (if not already there)
         OTS_FILE="${target}.ots"
         if [ -f "$OTS_FILE" ] && [ "$(dirname "$OTS_FILE")" != "." ]; then
-            BASENAME=$(basename "$OTS_FILE")
-            mv "$OTS_FILE" "./$BASENAME"
+            mv -f "$OTS_FILE" "./$BASENAME"
             echo "    → moved to timestamps/$BASENAME"
         fi
     else

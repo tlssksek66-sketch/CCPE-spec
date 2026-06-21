@@ -19,10 +19,14 @@ on:
       - 'cases/**'
   release:
     types: [published]
+  schedule:
+    - cron: '0 */6 * * *'  # every 6h — auto-upgrade pending Bitcoin proofs (1-6h confirm window)
   workflow_dispatch:  # manual trigger from Actions tab
 
 jobs:
   ots-anchor:
+    # Skip on schedule — scheduled runs are upgrade-only (no re-stamp needed).
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -76,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     
     steps:
       - name: Checkout repo
@@ -99,7 +103,7 @@ jobs:
             echo "No .ots files to upgrade"
             exit 0
           fi
-          ots upgrade timestamps/*.ots || true
+          ots upgrade --no-bak timestamps/*.ots || true   # Defect B: no .ots.bak clutter
       
       - name: Commit upgraded proofs
         run: |

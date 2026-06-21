@@ -1,0 +1,8 @@
+# OS / editor noise
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# OpenTimestamps upgrade backups (Defect B — never track; `ots upgrade` default .bak)
+*.bak
+timestamps/*.ots.bak
