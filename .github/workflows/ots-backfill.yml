@@ -103,7 +103,7 @@ jobs:
             echo "No .ots files to upgrade"
             exit 0
           fi
-          ots upgrade --no-bak timestamps/*.ots || true   # Defect B: no .ots.bak clutter
+          ots upgrade timestamps/*.ots || true   # .bak ignored by .gitignore; runner ephemeral
       
       - name: Commit upgraded proofs
         run: |

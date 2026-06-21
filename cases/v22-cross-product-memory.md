@@ -66,7 +66,7 @@ The third was unplanned — emerged when chat asked CC to audit the OTS automati
 
 - **Immediate**: `gh workflow run ots-backfill.yml --field workflow_dispatch=true` — manual upgrade trigger (Track A, pending Bitcoin confirmation timing)
 - **Permanent**: 3-line patch to `.github/workflows/ots-backfill.yml`:
-  - Add `schedule: - cron: '0 6 * * *'` to `on:` block
+  - Add `schedule: - cron: '0 */6 * * *'` to `on:` block (every 6h — intentionally aligned to the Bitcoin 1-6h confirm window; `ots upgrade` is idempotent so extra runs cost nothing)
   - Extend `if:` on `ots-upgrade` job: `github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'`
 - Both queued in v0.1.7 PR
 
@@ -191,6 +191,7 @@ Not promotion-worthy individually. Documented for environment-setup guides.
 | infra | OTS Workflow integrated patch (cron + `.sh` idempotency + `.bak` hygiene) | infra-fix | 1 (v22, defects A·B·C all surfaced in this trial) | **APPLY in v0.1.7 PR** ★ |
 | §3.x | Layered Audit for Automation Pipelines (static + dynamic) | contract | 1 (v22, §4.5 update + §4.7) | queue for 2nd case |
 | §RFC | Cross-Instance Capability Composition | proposal | 1 (v22) | **EVIDENCE for RFC-001** ★ |
+| Defect D | Re-stamp on watched-path push resets committed proof anchor time | anti-pattern (candidate) | 1 (v22 post-hoc) | **QUEUE — separate patch (priority spine)** |
 
 ## 6. Cross-References
 
